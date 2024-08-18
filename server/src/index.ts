@@ -64,34 +64,17 @@ const fetchWithTimeout = async (url: string, timeout: number = 10000) => {
     return response;
   } catch (error) {
     clearTimeout(timeoutId);
-    throw error;
-  }
-};
-
-const getRottenTomatoesRating = async (title: string) => {
-  let formattedTitle = title.trim().replace(/[\W_]+/g, "_");
-  if (title.includes("&")) formattedTitle = title.replace("&", "and");
-
-  try {
-    const response = await fetchWithTimeout(
-      `https://www.rottentomatoes.com/m/${formattedTitle}`,
-      7000
-    );
-
-    const html = await response.text();
-
-    const jsonMatch = html.match(
-      /<script id="media-scorecard-json"[^>]*>(.*?)<\/script>/
-    );
-    if (jsonMatch && jsonMatch[1]) {
-      const jsonData = JSON.parse(jsonMatch[1]);
-      return jsonData.audienceScore?.scorePercent || "N/A";
+    if (error instanceof Error) {
+      if (error.name === "AbortError") {
+        console.error("Fetch request aborted:", url);
+      } else {
+        console.error("Fetch error:", error.message);
+      }
     } else {
-      return "N/A";
+      console.error("Unknown error:", error);
     }
-  } catch (error) {
-    console.error("Error fetching Rotten Tomatoes rating:", error);
-    return "N/A";
+
+    throw error;
   }
 };
 
@@ -105,11 +88,14 @@ const fetchJson = async (url: string) => {
       return "N/A";
     }
   } catch (error) {
-    console.error("Error fetching JSON:", error);
+    if (error instanceof Error && error.name === "AbortError") {
+      console.error("Error fetching JSON: Request timed out", url);
+    } else {
+      console.error("Error fetching JSON:", error);
+    }
     return "N/A";
   }
 };
-
 const getLetterboxdRating = async (id: number) => {
   try {
     const response = await fetchWithTimeout(
@@ -134,9 +120,10 @@ const getLetterboxdRating = async (id: number) => {
 app.post("/", async (req, res) => {
   try {
     const page = req.body.page ? parseInt(req.body.page, 10) : 1;
+    const genre = req.body.genre ? req.body.genre : "";
 
     const response = await fetchWithTimeout(
-      `https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API}&language=en-US&page=${page}&primary_release_date.gte=2020-01-01`
+      `https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API}&language=en-US&page=${page}&with_original_language=en&sort_by=vote_count.desc&with_genres=${genre}`
     );
 
     if (!response.ok) {
@@ -153,30 +140,27 @@ app.post("/", async (req, res) => {
         limit(async () => {
           try {
             // 	<meta name="twitter:label2" content="Average rating" /><meta name="twitter:data2" content="4.20 out of 5" />
-            const [rottenTomatoesRating, imdbResponse, letterBoxRating] =
-              await Promise.all([
-                getRottenTomatoesRating(movie.title),
-                fetchJson(
-                  `https://www.omdbapi.com/?t=${encodeURIComponent(
-                    movie.title
-                  )}&apikey=${OMDB_API}`
-                ) as any,
-                getLetterboxdRating(movie.id),
-              ]);
+            const [imdbResponse, letterBoxRating] = await Promise.all([
+              fetchJson(
+                `https://www.omdbapi.com/?t=${movie.title}&apikey=${OMDB_API}`
+              ) as any,
+              getLetterboxdRating(movie.id),
+            ]);
 
             const imdbRating = imdbResponse.imdbRating || "N/A";
+            let omdbRottenTomato = { Value: "N/A" };
+
+            if (imdbResponse.Ratings) {
+              omdbRottenTomato = imdbResponse.Ratings.find(
+                (rating: any) => rating.Source === "Rotten Tomatoes"
+              ) || { Value: "N/A" };
+            }
 
             return {
               ...movie,
-              rottenTomatoesRating,
+              rottenTomatoesRating: omdbRottenTomato.Value,
               imdbRating,
               letterBoxRating,
-              totalRating:
-                (movie.vote_average +
-                  parseFloat(imdbRating) +
-                  parseFloat(rottenTomatoesRating) +
-                  parseFloat(letterBoxRating)) /
-                4,
             };
           } catch (error) {
             console.error("Error fetching ratings:", error);
@@ -191,11 +175,7 @@ app.post("/", async (req, res) => {
       )
     );
 
-    const sortedMoviesWithRatings = moviesWithRatings.sort(
-      (a, b) => b.totalRating - a.totalRating
-    );
-
-    res.send(sortedMoviesWithRatings);
+    res.send(moviesWithRatings);
   } catch (error) {
     console.error("Server Error:", error);
     res.status(500).send("Internal Server Error");
