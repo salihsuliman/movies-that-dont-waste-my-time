@@ -6,113 +6,17 @@ import {
   faChevronLeft,
   faChevronRight,
 } from "@fortawesome/free-solid-svg-icons";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { twMerge } from "tailwind-merge";
-
-interface Film {
-  id: number;
-  title: string;
-  imageUrl: string;
-  overview: string;
-  releaseDate: string;
-  rottenTomatoesRating: string;
-  imdbRating: string;
-  letterBoxRating: string;
-}
-interface Movie {
-  adult: boolean;
-  backdrop_path: string;
-  genre_ids: number[];
-  id: number;
-  original_language: string;
-  original_title: string;
-  overview: string;
-  popularity: number;
-  poster_path: string;
-  release_date: string;
-  title: string;
-  video: boolean;
-  vote_average: number;
-  vote_count: number;
-  rottenTomatoesRating: string;
-  imdbRating: string;
-  letterBoxRating: string;
-}
-
-const GenreFilter = [
-  {
-    id: 28,
-    name: "Action",
-  },
-  {
-    id: 12,
-    name: "Adventure",
-  },
-  {
-    id: 16,
-    name: "Animation",
-  },
-  {
-    id: 35,
-    name: "Comedy",
-  },
-  {
-    id: 80,
-    name: "Crime",
-  },
-  {
-    id: 99,
-    name: "Documentary",
-  },
-  {
-    id: 18,
-    name: "Drama",
-  },
-  {
-    id: 10751,
-    name: "Family",
-  },
-  {
-    id: 14,
-    name: "Fantasy",
-  },
-  {
-    id: 36,
-    name: "History",
-  },
-  {
-    id: 27,
-    name: "Horror",
-  },
-  {
-    id: 9648,
-    name: "Mystery",
-  },
-  {
-    id: 10749,
-    name: "Romance",
-  },
-  {
-    id: 878,
-    name: "Science Fiction",
-  },
-  {
-    id: 53,
-    name: "Thriller",
-  },
-  {
-    id: 10752,
-    name: "War",
-  },
-  {
-    id: 37,
-    name: "Western",
-  },
-];
+import { Film, GenreFilter, Movie } from "@/utils/constants";
+import FilmDetails from "./FilmDetails";
 
 const FilmList = (): JSX.Element => {
   const router = useRouter();
-  const pageParam = new URLSearchParams(window.location.search).get("page");
+  const searchParams = useSearchParams();
+
+  const pageParam = searchParams.get("page");
+
   const [films, setFilms] = useState<Film[]>([]);
   const [page, setPage] = useState<string>(pageParam || "1");
   const [viewMode, setViewMode] = useState<"grid" | "slideshow">("grid");
@@ -125,11 +29,12 @@ const FilmList = (): JSX.Element => {
     }[]
   >([]);
 
+  // Fetches films from the server and sets the state
   const fetchFilms = async () => {
     setFullLoading(true);
     try {
       const genreArrayToString = genreArray.map((genre) => genre.id).join(",");
-      const response = await fetch("http://localhost:4000/", {
+      const response = await fetch("http://localhost:4000/get-movies", {
         method: "POST",
         body: JSON.stringify({ page, genre: genreArrayToString }),
         headers: {
@@ -150,53 +55,45 @@ const FilmList = (): JSX.Element => {
         letterBoxRating: movie.letterBoxRating,
       }));
 
-      formattedFilms.sort((a, b) => {
-        // order by highest average rating from rotten tomatoes, imdb, and letterboxd
-        const aRating =
-          (a.rottenTomatoesRating ? parseFloat(a.rottenTomatoesRating) : 0) +
-          (a.imdbRating ? parseFloat(a.imdbRating) : 0) +
-          (a.letterBoxRating ? parseFloat(a.letterBoxRating) : 0);
-        const bRating =
-          (b.rottenTomatoesRating ? parseFloat(b.rottenTomatoesRating) : 0) +
-          (b.imdbRating ? parseFloat(b.imdbRating) : 0) +
-          (b.letterBoxRating ? parseFloat(b.letterBoxRating) : 0);
-        return bRating - aRating;
-      });
       setFilms(formattedFilms);
     } catch (error) {
       console.error("Error fetching films:", error);
     }
   };
 
+  // Handles loading the page when no page params are present
   useEffect(() => {
     if (!pageParam) {
       router.push(`?page=${page}`);
     }
 
     fetchFilms();
-  }, [page, pageParam, router]);
+  }, [page, router]);
 
+  // Handles loading the page when the page params change
   const handlePageChange = (newPage: string) => {
     setPage(newPage);
     router.push(`?page=${newPage}`);
   };
 
+  // Toggles the view mode between grid and slideshow
   const toggleViewMode = () => {
     setViewMode((prevMode) => (prevMode === "grid" ? "slideshow" : "grid"));
   };
 
+  // Handles the next film in the slideshow
   const handleNextFilm = () => {
     setCurrentFilmIndex((prevIndex) => (prevIndex + 1) % films.length);
   };
 
+  // Handles the previous film in the slideshow
   const handlePreviousFilm = () => {
     setCurrentFilmIndex(
       (prevIndex) => (prevIndex - 1 + films.length) % films.length
     );
   };
 
-  console.log(films[currentFilmIndex]);
-
+  // If the page is loading, show a loading state
   if (fullLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen w-full py-2">
@@ -234,6 +131,7 @@ const FilmList = (): JSX.Element => {
       </div>
     );
   }
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen w-full py-2">
       <button
@@ -244,6 +142,8 @@ const FilmList = (): JSX.Element => {
       >
         Toggle View Mode
       </button>
+      {/* Shows different genres user can select. Only shown in grid mode */}
+
       {viewMode === "grid" && (
         <div className="flex flex-wrap w-1/2">
           {GenreFilter.map((genre) => (
@@ -292,7 +192,9 @@ const FilmList = (): JSX.Element => {
             </>
           )}
         </div>
-      )}{" "}
+      )}
+      {/* Logic condition that only shows grid view when viewMode is set to grid else we know its slideshow mode */}
+
       {viewMode === "grid" ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
           {films.map((film) => (
@@ -353,26 +255,7 @@ const FilmList = (): JSX.Element => {
         </div>
       ) : (
         <div className="flex flex-col items-center">
-          {films.length > 0 && (
-            <div className="flex flex-row justify-evenly">
-              <Image
-                src={films[currentFilmIndex].imageUrl}
-                alt={films[currentFilmIndex].title}
-                width={500}
-                height={750}
-                className="w-[400px] h-auto object-cover rounded-lg"
-              />
-              <div className="w-1/3">
-                <h3 className="text-2xl font-bold mt-4">
-                  {films[currentFilmIndex].title}
-                </h3>
-                <h3 className="text-2xl font-bold mt-4">
-                  Release date: {films[currentFilmIndex].releaseDate}
-                </h3>
-                <p className="mt-2">{films[currentFilmIndex].overview}</p>
-              </div>
-            </div>
-          )}
+          {films.length > 0 && <FilmDetails film={films[currentFilmIndex]} />}
           <div className="flex justify-center items-center space-x-4 mt-4">
             <button
               className="bg-white hover:bg-gray-100 text-black font-bold py-2 px-4 rounded"
@@ -389,6 +272,7 @@ const FilmList = (): JSX.Element => {
           </div>
         </div>
       )}
+      {/* Only show page changing when in grid mode */}
       {viewMode === "grid" && (
         <div className="flex justify-center items-center space-x-4 mt-4">
           {(!page || page !== "1") && (
