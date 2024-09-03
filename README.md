@@ -2,7 +2,7 @@
 
 An app that pulls in movies from TheMovieDB API, then compares reviews from IMDb, Letterboxd, and Rotten Tomatoes. This provides an average rating, so you are not misled by skewed reviews.
 
-Video explaining app: https://www.youtube.com/watch?v=-6toJu5ioYE&t=5s
+Video explaining app: https://www.youtube.com/watch?v=-6toJu5ioYE
 
 ## Installation
 
