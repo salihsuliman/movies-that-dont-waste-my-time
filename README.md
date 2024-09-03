@@ -2,6 +2,8 @@
 
 An app that pulls in movies from TheMovieDB API, then compares reviews from IMDb, Letterboxd, and Rotten Tomatoes. This provides an average rating, so you are not misled by skewed reviews.
 
+Video explaining app: https://www.youtube.com/watch?v=-6toJu5ioYE&t=5s
+
 ## Installation
 
 Make sure to clone the repository and install the necessary dependencies for both the client and server.
